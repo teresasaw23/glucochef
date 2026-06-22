@@ -48,7 +48,6 @@ export default function RecipesPage() {
       <div className="flex gap-2 overflow-x-auto pb-1">
         {[
           { key: "all", label: "Todas" },
-          { key: "pequeno-almoco", label: "Peq. almoço" },
           { key: "almoco", label: "Almoço" },
           { key: "jantar", label: "Jantar" },
         ].map((f) => (

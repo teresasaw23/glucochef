@@ -133,7 +133,7 @@ export default function PlannerPage() {
             </span>
           </h2>
 
-          {(["pequeno-almoco", "almoco", "jantar"] as const).map((mealType) => {
+          {(["almoco", "jantar"] as const).map((mealType) => {
             const recipeId = day.meals[mealType];
             const recipe = recipeId ? getRecipeById(recipeId) : null;
 

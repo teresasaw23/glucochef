@@ -6,7 +6,6 @@ export function generateShoppingList(plan: MealPlan): ShoppingItem[] {
 
   for (const day of plan.days) {
     const mealIds = [
-      day.meals["pequeno-almoco"],
       day.meals["almoco"],
       day.meals["jantar"],
     ];

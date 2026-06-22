@@ -21,11 +21,9 @@ function pickRandom<T>(arr: T[], exclude: Set<string> = new Set()): T {
 export function generateWeeklyPlan(weekStart?: Date): MealPlan {
   const monday = weekStart ? getMonday(weekStart) : getMonday(new Date());
 
-  const breakfastRecipes = getRecipesByMealType("pequeno-almoco");
   const lunchRecipes = getRecipesByMealType("almoco");
   const dinnerRecipes = getRecipesByMealType("jantar");
 
-  const usedBreakfast = new Set<string>();
   const usedLunch = new Set<string>();
   const usedDinner = new Set<string>();
 
@@ -34,9 +32,6 @@ export function generateWeeklyPlan(weekStart?: Date): MealPlan {
   for (let i = 0; i < 7; i++) {
     const date = new Date(monday);
     date.setDate(monday.getDate() + i);
-
-    const breakfast = pickRandom(breakfastRecipes, usedBreakfast);
-    usedBreakfast.add(breakfast.id);
 
     const lunch = pickRandom(lunchRecipes, usedLunch);
     usedLunch.add(lunch.id);
@@ -48,7 +43,6 @@ export function generateWeeklyPlan(weekStart?: Date): MealPlan {
       date: date.toISOString().split("T")[0],
       dayOfWeek: DAY_NAMES[i],
       meals: {
-        "pequeno-almoco": breakfast.id,
         almoco: lunch.id,
         jantar: dinner.id,
       },

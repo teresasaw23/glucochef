@@ -63,7 +63,6 @@ export interface DayPlan {
   date: string;
   dayOfWeek: string;
   meals: {
-    "pequeno-almoco": string | null; // recipe id
     "almoco": string | null;
     "jantar": string | null;
   };

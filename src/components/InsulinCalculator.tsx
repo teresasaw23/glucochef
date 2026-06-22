@@ -3,6 +3,11 @@
 import { useState, useEffect } from "react";
 import { calculateInsulinDose } from "@/lib/insulin";
 import { USER_CONFIG } from "@/lib/config";
+import { FIXED_BREAKFAST } from "@/lib/recipes";
+
+const QUICK_MEALS = [
+  { label: "Peq. almoço", carbs: FIXED_BREAKFAST.nutrition.carbs },
+];
 
 export default function InsulinCalculator() {
   const [carbs, setCarbs] = useState<string>("");
@@ -31,15 +36,32 @@ export default function InsulinCalculator() {
     setResult(calculateInsulinDose(c, g));
   }
 
+  function handleQuickMeal(carbsValue: number) {
+    setCarbs(String(carbsValue));
+  }
+
   return (
     <div className="rounded-2xl bg-white border border-gray-200 p-6">
       <h2 className="text-lg font-semibold mb-4">Calculadora de Insulina</h2>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm text-gray-600 mb-1">
-            Hidratos de carbono (g)
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm text-gray-600">
+              Hidratos de carbono (g)
+            </label>
+            <div className="flex gap-1.5">
+              {QUICK_MEALS.map((m) => (
+                <button
+                  key={m.label}
+                  onClick={() => handleQuickMeal(m.carbs)}
+                  className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full hover:bg-blue-100 hover:text-blue-700"
+                >
+                  {m.label} ({m.carbs}g)
+                </button>
+              ))}
+            </div>
+          </div>
           <input
             type="number"
             inputMode="decimal"

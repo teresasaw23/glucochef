@@ -153,7 +153,6 @@ export default function NewRecipePage() {
           </label>
           <div className="flex gap-2 flex-wrap">
             {[
-              { key: "pequeno-almoco", label: "Peq. almoço" },
               { key: "almoco", label: "Almoço" },
               { key: "jantar", label: "Jantar" },
               { key: "snack", label: "Snack" },
