@@ -12,19 +12,24 @@ export default function ShoppingPage() {
   const [store, setStore] = useState<"aldi" | "continente">("continente");
 
   useEffect(() => {
-    const savedList = localStorage.getItem(SHOPPING_STORAGE_KEY);
-    if (savedList) {
-      setItems(JSON.parse(savedList));
-      return;
-    }
-
-    const savedPlan = localStorage.getItem(PLAN_STORAGE_KEY);
-    if (savedPlan) {
-      const plan: MealPlan = JSON.parse(savedPlan);
-      const list = generateShoppingList(plan);
-      setItems(list);
-      localStorage.setItem(SHOPPING_STORAGE_KEY, JSON.stringify(list));
-    }
+    let cancelled = false;
+    const loadList = () => {
+      if (cancelled) return;
+      const savedList = localStorage.getItem(SHOPPING_STORAGE_KEY);
+      if (savedList) {
+        setItems(JSON.parse(savedList));
+        return;
+      }
+      const savedPlan = localStorage.getItem(PLAN_STORAGE_KEY);
+      if (savedPlan) {
+        const plan: MealPlan = JSON.parse(savedPlan);
+        const list = generateShoppingList(plan);
+        setItems(list);
+        localStorage.setItem(SHOPPING_STORAGE_KEY, JSON.stringify(list));
+      }
+    };
+    requestAnimationFrame(loadList);
+    return () => { cancelled = true; };
   }, []);
 
   function handleToggle(index: number) {
@@ -113,10 +118,6 @@ export default function ShoppingPage() {
         <div className="space-y-5">
           {(Object.entries(grouped) as [ShoppingCategory, ShoppingItem[]][]).map(
             ([category, categoryItems]) => {
-              const globalStartIndex = items.findIndex(
-                (i) => i.name === categoryItems[0].name && i.category === category
-              );
-
               return (
                 <div key={category}>
                   <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">

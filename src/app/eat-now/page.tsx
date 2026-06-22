@@ -2,19 +2,20 @@
 
 import { useState, useEffect } from "react";
 import { GlucoseReading, MealPlan } from "@/lib/types";
-import { getRecipeById, RECIPES } from "@/lib/recipes";
+import { getRecipeById, RECIPES, getRecipesByMealType } from "@/lib/recipes";
 import { recommendMeal, Recommendation } from "@/lib/recommend";
 import { getGlucoseStatus, getDirectionArrow } from "@/lib/insulin";
 import { USER_CONFIG } from "@/lib/config";
-import RecipeCard from "@/components/RecipeCard";
+import Link from "next/link";
 
 const PLAN_STORAGE_KEY = "glucochef-meal-plan";
 
 export default function EatNowPage() {
   const [glucose, setGlucose] = useState<GlucoseReading | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [snackRecs, setSnackRecs] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Recommendation | null>(null);
+  const [tab, setTab] = useState<"meals" | "snacks">("meals");
 
   useEffect(() => {
     async function load() {
@@ -29,9 +30,10 @@ export default function EatNowPage() {
         // continue without glucose
       }
 
-      // Get today's planned recipes
       const savedPlan = localStorage.getItem(PLAN_STORAGE_KEY);
-      let availableRecipes = RECIPES;
+      let availableRecipes = RECIPES.filter(
+        (r) => !r.mealType.includes("snack")
+      );
 
       if (savedPlan) {
         const plan: MealPlan = JSON.parse(savedPlan);
@@ -39,7 +41,9 @@ export default function EatNowPage() {
         const todayPlan = plan.days.find((d) => d.date === today);
 
         if (todayPlan) {
-          const todayRecipeIds = Object.values(todayPlan.meals).filter(Boolean) as string[];
+          const todayRecipeIds = Object.values(todayPlan.meals).filter(
+            Boolean
+          ) as string[];
           const todayRecipes = todayRecipeIds
             .map((id) => getRecipeById(id))
             .filter(Boolean) as typeof RECIPES;
@@ -50,14 +54,50 @@ export default function EatNowPage() {
         }
       }
 
+      const snacks = getRecipesByMealType("snack");
+
       if (glucoseData) {
-        const recs = recommendMeal(glucoseData, availableRecipes);
-        setRecommendations(recs);
+        const mealRecs = recommendMeal(glucoseData, availableRecipes);
+        setRecommendations(mealRecs);
+
+        const snacksSorted = [...snacks];
+        if (glucoseData.sgv > 180) {
+          snacksSorted.sort((a, b) => a.nutrition.carbs - b.nutrition.carbs);
+          setTab("snacks");
+        } else if (glucoseData.sgv < 70) {
+          snacksSorted.sort((a, b) => b.nutrition.carbs - a.nutrition.carbs);
+          setTab("snacks");
+        }
+
+        setSnackRecs(
+          snacksSorted.map((recipe) => {
+            let reason: string;
+            if (glucoseData!.sgv > 180) {
+              reason = "Glicemia alta — escolhe snacks sem/baixo hidratos";
+            } else if (glucoseData!.sgv < 70) {
+              reason = "Glicemia baixa — come algo com hidratos rápidos";
+            } else {
+              reason = "Snack para entre refeições";
+            }
+            const estimatedCarbs = recipe.nutrition.carbs;
+            const estimatedInsulin =
+              Math.round(
+                (estimatedCarbs / USER_CONFIG.insulinCarbRatio) * 2
+              ) / 2;
+            return {
+              recipe,
+              reason,
+              suggestedServings: 1,
+              estimatedCarbs,
+              estimatedInsulin,
+            };
+          })
+        );
       } else {
-        // Without glucose, just show today's meals sorted by carbs (medium first)
         const recs = availableRecipes.slice(0, 3).map((recipe) => ({
           recipe,
-          reason: "Sem dados de glicemia — recomendação baseada no plano do dia",
+          reason:
+            "Sem dados de glicemia — recomendação baseada no plano do dia",
           suggestedServings: 1,
           estimatedCarbs: recipe.nutrition.carbs,
           estimatedInsulin:
@@ -66,6 +106,19 @@ export default function EatNowPage() {
             ) / 2,
         }));
         setRecommendations(recs);
+
+        setSnackRecs(
+          snacks.map((recipe) => ({
+            recipe,
+            reason: "Snack para entre refeições",
+            suggestedServings: 1,
+            estimatedCarbs: recipe.nutrition.carbs,
+            estimatedInsulin:
+              Math.round(
+                (recipe.nutrition.carbs / USER_CONFIG.insulinCarbRatio) * 2
+              ) / 2,
+          }))
+        );
       }
 
       setLoading(false);
@@ -86,103 +139,7 @@ export default function EatNowPage() {
     );
   }
 
-  if (selected) {
-    const recipe = selected.recipe;
-    const insulinDose =
-      Math.round(
-        (selected.estimatedCarbs / USER_CONFIG.insulinCarbRatio) * 2
-      ) / 2;
-
-    let correctionDose = 0;
-    if (glucose && glucose.sgv > USER_CONFIG.targetGlucoseMax) {
-      correctionDose =
-        Math.round(
-          ((glucose.sgv - USER_CONFIG.targetGlucose) /
-            USER_CONFIG.correctionFactor) *
-            10
-        ) / 10;
-    }
-
-    const totalDose = Math.round((insulinDose + correctionDose) * 2) / 2;
-
-    return (
-      <div className="px-4 pt-6 space-y-4">
-        <button
-          onClick={() => setSelected(null)}
-          className="flex items-center gap-2 text-gray-500 hover:text-gray-700"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Voltar
-        </button>
-
-        <RecipeCard recipe={recipe} />
-
-        <div className="bg-blue-50 rounded-2xl p-5 space-y-4">
-          <h3 className="font-semibold text-blue-800">Dose de Fiasp</h3>
-
-          <div className="text-center">
-            <p className="text-5xl font-bold text-blue-700">{totalDose}</p>
-            <p className="text-sm text-blue-500 mt-1">unidades</p>
-          </div>
-
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Porção sugerida</span>
-              <span className="font-medium">
-                {selected.suggestedServings === 1
-                  ? "Normal"
-                  : `${selected.suggestedServings}x`}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Hidratos estimados</span>
-              <span className="font-medium">{selected.estimatedCarbs}g</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Insulina para hidratos</span>
-              <span className="font-medium">{insulinDose}u</span>
-            </div>
-            {correctionDose > 0 && (
-              <div className="flex justify-between">
-                <span className="text-gray-600">Correção</span>
-                <span className="font-medium">+{correctionDose}u</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h3 className="font-semibold mb-3">Ingredientes</h3>
-          <ul className="space-y-1">
-            {recipe.ingredients.map((ing, i) => (
-              <li key={i} className="text-sm text-gray-600 flex justify-between">
-                <span>{ing.name}</span>
-                <span className="text-gray-400">
-                  {ing.quantity} {ing.unit}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h3 className="font-semibold mb-3">Preparação</h3>
-          <ol className="space-y-2">
-            {recipe.steps.map((step, i) => (
-              <li key={i} className="text-sm text-gray-600 flex gap-3">
-                <span className="text-blue-600 font-medium flex-shrink-0">
-                  {i + 1}.
-                </span>
-                {step}
-              </li>
-            ))}
-          </ol>
-        </div>
-      </div>
-    );
-  }
+  const currentRecs = tab === "meals" ? recommendations : snackRecs;
 
   return (
     <div className="px-4 pt-6 space-y-4">
@@ -204,20 +161,69 @@ export default function EatNowPage() {
               {getDirectionArrow(glucose.direction)}
             </span>
             <span className="text-sm text-gray-500">mg/dL</span>
+            <span
+              className={`text-sm font-medium ml-auto ${
+                getGlucoseStatus(glucose.sgv).color
+              }`}
+            >
+              {getGlucoseStatus(glucose.sgv).label}
+            </span>
           </div>
+
+          {glucose.sgv < 70 && (
+            <div className="mt-2 p-2 bg-red-200 rounded-lg">
+              <p className="text-sm text-red-800 font-medium">
+                Come algo com açúcar rápido AGORA (sumo, mel, comprimidos glucose)
+              </p>
+              <p className="text-xs text-red-700 mt-1">
+                Depois de corrigir, espera 15 min e come um snack.
+              </p>
+            </div>
+          )}
+
+          {glucose.sgv > 180 && (
+            <div className="mt-2 p-2 bg-orange-200 rounded-lg">
+              <p className="text-sm text-orange-800 font-medium">
+                Evita hidratos — escolhe snacks sem ou baixos em hidratos
+              </p>
+            </div>
+          )}
         </div>
       )}
 
-      {recommendations.length > 0 && (
-        <p className="text-sm text-gray-500">{recommendations[0].reason}</p>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setTab("meals")}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+            tab === "meals"
+              ? "bg-blue-600 text-white"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          Refeições
+        </button>
+        <button
+          onClick={() => setTab("snacks")}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+            tab === "snacks"
+              ? "bg-blue-600 text-white"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          Snacks
+        </button>
+      </div>
+
+      {currentRecs.length > 0 && (
+        <p className="text-sm text-gray-500">{currentRecs[0].reason}</p>
       )}
 
       <div className="space-y-3">
-        {recommendations.map((rec, i) => (
-          <button
+        {currentRecs.map((rec, i) => (
+          <Link
             key={rec.recipe.id}
-            onClick={() => setSelected(rec)}
-            className="w-full text-left"
+            href={`/recipes/${rec.recipe.id}`}
+            className="block"
           >
             <div className="bg-white rounded-2xl border border-gray-200 p-4 hover:border-blue-300 transition-colors">
               <div className="flex items-start justify-between">
@@ -228,6 +234,14 @@ export default function EatNowPage() {
                         Recomendado
                       </span>
                     )}
+                    {rec.recipe.mealType.includes("snack") &&
+                      rec.recipe.nutrition.carbs <= 6 &&
+                      glucose &&
+                      glucose.sgv > 180 && (
+                        <span className="bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                          Sem hidratos
+                        </span>
+                      )}
                   </div>
                   <h3 className="font-semibold mt-1">{rec.recipe.name}</h3>
                   <p className="text-sm text-gray-500 mt-0.5">
@@ -240,15 +254,23 @@ export default function EatNowPage() {
                 <span className="text-gray-600">
                   {rec.estimatedCarbs}g HC
                 </span>
-                <span className="text-blue-600 font-medium">
-                  {rec.estimatedInsulin}u Fiasp
+                <span className="text-gray-600">
+                  {rec.recipe.nutrition.calories} kcal
                 </span>
+                {rec.estimatedInsulin > 0 && (
+                  <span className="text-blue-600 font-medium">
+                    {rec.estimatedInsulin}u Fiasp
+                  </span>
+                )}
                 <span className="text-gray-400">
                   {rec.recipe.prepTimeMinutes + rec.recipe.cookTimeMinutes} min
                 </span>
+                <span className="ml-auto text-blue-500 text-xs">
+                  Ver receita →
+                </span>
               </div>
             </div>
-          </button>
+          </Link>
         ))}
       </div>
     </div>

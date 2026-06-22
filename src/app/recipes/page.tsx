@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { RECIPES } from "@/lib/recipes";
-import { MEAL_TYPE_LABELS } from "@/lib/types";
 import RecipeCard from "@/components/RecipeCard";
 
 export default function RecipesPage() {
@@ -50,6 +49,7 @@ export default function RecipesPage() {
           { key: "all", label: "Todas" },
           { key: "almoco", label: "Almoço" },
           { key: "jantar", label: "Jantar" },
+          { key: "snack", label: "Snacks" },
         ].map((f) => (
           <button
             key={f.key}

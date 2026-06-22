@@ -16,14 +16,21 @@ export default function PlannerPage() {
   } | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      setPlan(JSON.parse(saved));
-    } else {
-      const newPlan = generateWeeklyPlan();
-      setPlan(newPlan);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newPlan));
-    }
+    let cancelled = false;
+    const loadPlan = () => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!cancelled) {
+        if (saved) {
+          setPlan(JSON.parse(saved));
+        } else {
+          const newPlan = generateWeeklyPlan();
+          setPlan(newPlan);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(newPlan));
+        }
+      }
+    };
+    requestAnimationFrame(loadPlan);
+    return () => { cancelled = true; };
   }, []);
 
   function handleNewPlan() {

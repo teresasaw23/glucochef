@@ -1,4 +1,5 @@
 import GlucoseCard from "@/components/GlucoseCard";
+import GlucoseAlert from "@/components/GlucoseAlert";
 import InsulinCalculator from "@/components/InsulinCalculator";
 import Link from "next/link";
 
@@ -13,6 +14,7 @@ export default function Home() {
       </div>
 
       <GlucoseCard />
+      <GlucoseAlert />
 
       <div className="grid grid-cols-2 gap-3">
         <Link

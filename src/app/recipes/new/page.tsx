@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingCategory, SHOPPING_CATEGORY_LABELS } from "@/lib/types";
+import { ShoppingCategory } from "@/lib/types";
 
 interface IngredientInput {
   name: string;

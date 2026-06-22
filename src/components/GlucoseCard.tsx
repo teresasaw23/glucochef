@@ -8,28 +8,31 @@ export default function GlucoseCard() {
   const [glucose, setGlucose] = useState<GlucoseReading | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  async function fetchGlucose() {
-    try {
-      const res = await fetch("/api/glucose");
-      if (!res.ok) {
-        setError("Sem dados de glicemia");
-        return;
-      }
-      const data = await res.json();
-      setGlucose(data);
-      setError(null);
-    } catch {
-      setError("Erro ao ligar ao Nightscout");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    fetchGlucose();
-    const interval = setInterval(fetchGlucose, 60000);
-    return () => clearInterval(interval);
+    const controller = new AbortController();
+    const doFetch = async () => {
+      try {
+        const res = await fetch("/api/glucose", { signal: controller.signal });
+        if (!res.ok) {
+          setError("Sem dados de glicemia");
+          return;
+        }
+        const data = await res.json();
+        setGlucose(data);
+        setNow(Date.now());
+        setError(null);
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        setError("Erro ao ligar ao Nightscout");
+      } finally {
+        setLoading(false);
+      }
+    };
+    doFetch();
+    const interval = setInterval(doFetch, 60000);
+    return () => { controller.abort(); clearInterval(interval); };
   }, []);
 
   if (loading) {
@@ -55,7 +58,7 @@ export default function GlucoseCard() {
 
   const status = getGlucoseStatus(glucose.sgv);
   const arrow = getDirectionArrow(glucose.direction);
-  const minutesAgo = Math.round((Date.now() - glucose.date) / 60000);
+  const minutesAgo = Math.round((now - glucose.date) / 60000);
 
   return (
     <div className={`rounded-2xl ${status.bgColor} p-6`}>
