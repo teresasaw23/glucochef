@@ -9,6 +9,15 @@ export interface Recommendation {
   estimatedInsulin: number;
 }
 
+function getServingMultiplier(sgv: number): number {
+  if (sgv > 180) return 0.6;
+  if (sgv > 150) return 0.75;
+  if (sgv > 120) return 0.85;
+  if (sgv < 70) return 1.2;
+  if (sgv < 90) return 1.1;
+  return 1;
+}
+
 export function recommendMeal(
   glucose: GlucoseReading,
   availableRecipes: Recipe[]
@@ -30,37 +39,31 @@ export function recommendMeal(
     return aMidCarbs - bMidCarbs;
   });
 
-  return sorted.slice(0, 3).map((recipe) => {
+  const mult = getServingMultiplier(sgv);
+
+  return sorted.slice(0, 5).map((recipe) => {
     let reason: string;
-    let suggestedServings = 1;
 
     if (sgv > 180) {
-      reason = `Glicemia alta (${sgv} mg/dL) — refeição baixa em hidratos recomendada`;
-      suggestedServings = recipe.nutrition.carbs > 40 ? 0.75 : 1;
+      reason = `Glicemia alta (${sgv}) — porção reduzida, menos hidratos`;
     } else if (sgv > USER_CONFIG.targetGlucoseMax) {
-      reason = `Glicemia acima do ideal (${sgv} mg/dL) — porção normal, considerar menos hidratos`;
-      suggestedServings = 1;
+      reason = `Glicemia acima do ideal (${sgv}) — porção moderada`;
     } else if (sgv < 70) {
-      reason = `Glicemia baixa (${sgv} mg/dL) — comer primeiro algo com açúcar rápido, depois esta refeição`;
-      suggestedServings = 1;
+      reason = `Glicemia baixa (${sgv}) — come açúcar rápido primeiro, depois esta refeição`;
     } else if (sgv < USER_CONFIG.targetGlucoseMin) {
-      reason = `Glicemia normal-baixa (${sgv} mg/dL) — boa altura para comer`;
-      suggestedServings = 1;
+      reason = `Glicemia normal (${sgv}) — boa altura para comer`;
     } else {
-      reason = `Glicemia ideal (${sgv} mg/dL) — porção normal`;
-      suggestedServings = 1;
+      reason = `Glicemia ideal (${sgv}) — porção normal`;
     }
 
-    const estimatedCarbs = Math.round(
-      recipe.nutrition.carbs * suggestedServings
-    );
+    const estimatedCarbs = Math.round(recipe.nutrition.carbs * mult);
     const estimatedInsulin =
       Math.round((estimatedCarbs / USER_CONFIG.insulinCarbRatio) * 2) / 2;
 
     return {
       recipe,
       reason,
-      suggestedServings,
+      suggestedServings: mult,
       estimatedCarbs,
       estimatedInsulin,
     };

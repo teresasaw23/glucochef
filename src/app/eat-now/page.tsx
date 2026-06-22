@@ -10,18 +10,38 @@ import Link from "next/link";
 
 const PLAN_STORAGE_KEY = "glucochef-meal-plan";
 
+function getServingMultiplier(sgv: number): number {
+  if (sgv > 180) return 0.6;
+  if (sgv > 150) return 0.75;
+  if (sgv > 120) return 0.85;
+  if (sgv < 70) return 1.2;
+  if (sgv < 90) return 1.1;
+  return 1;
+}
+
+function getServingLabel(sgv: number): string {
+  if (sgv > 180) return "Porção reduzida (glicemia alta)";
+  if (sgv > 150) return "Porção ligeiramente reduzida";
+  if (sgv > 120) return "Porção moderada";
+  if (sgv < 70) return "Porção maior (glicemia baixa)";
+  if (sgv < 90) return "Porção ligeiramente maior";
+  return "Porção normal";
+}
+
 export default function EatNowPage() {
   const [glucose, setGlucose] = useState<GlucoseReading | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [snackRecs, setSnackRecs] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"meals" | "snacks">("meals");
+  const [usingPlan, setUsingPlan] = useState(false);
 
   useEffect(() => {
-    async function load() {
+    const controller = new AbortController();
+    const load = async () => {
       let glucoseData: GlucoseReading | null = null;
       try {
-        const res = await fetch("/api/glucose");
+        const res = await fetch("/api/glucose", { signal: controller.signal });
         if (res.ok) {
           glucoseData = await res.json();
           setGlucose(glucoseData);
@@ -34,6 +54,7 @@ export default function EatNowPage() {
       let availableRecipes = RECIPES.filter(
         (r) => !r.mealType.includes("snack")
       );
+      let fromPlan = false;
 
       if (savedPlan) {
         const plan: MealPlan = JSON.parse(savedPlan);
@@ -50,10 +71,30 @@ export default function EatNowPage() {
 
           if (todayRecipes.length > 0) {
             availableRecipes = todayRecipes;
+            fromPlan = true;
+          }
+        }
+
+        if (!fromPlan) {
+          const allPlanIds = new Set<string>();
+          for (const day of plan.days) {
+            for (const id of Object.values(day.meals)) {
+              if (id) allPlanIds.add(id);
+            }
+          }
+          if (allPlanIds.size > 0) {
+            const planRecipes = [...allPlanIds]
+              .map((id) => getRecipeById(id))
+              .filter(Boolean) as typeof RECIPES;
+            if (planRecipes.length > 0) {
+              availableRecipes = planRecipes;
+              fromPlan = true;
+            }
           }
         }
       }
 
+      setUsingPlan(fromPlan);
       const snacks = getRecipesByMealType("snack");
 
       if (glucoseData) {
@@ -79,7 +120,8 @@ export default function EatNowPage() {
             } else {
               reason = "Snack para entre refeições";
             }
-            const estimatedCarbs = recipe.nutrition.carbs;
+            const mult = getServingMultiplier(glucoseData!.sgv);
+            const estimatedCarbs = Math.round(recipe.nutrition.carbs * mult);
             const estimatedInsulin =
               Math.round(
                 (estimatedCarbs / USER_CONFIG.insulinCarbRatio) * 2
@@ -87,17 +129,18 @@ export default function EatNowPage() {
             return {
               recipe,
               reason,
-              suggestedServings: 1,
+              suggestedServings: mult,
               estimatedCarbs,
               estimatedInsulin,
             };
           })
         );
       } else {
-        const recs = availableRecipes.slice(0, 3).map((recipe) => ({
+        const recs = availableRecipes.slice(0, 5).map((recipe) => ({
           recipe,
-          reason:
-            "Sem dados de glicemia — recomendação baseada no plano do dia",
+          reason: fromPlan
+            ? "Do teu plano semanal — sem dados de glicemia"
+            : "Recomendação geral — sem dados de glicemia",
           suggestedServings: 1,
           estimatedCarbs: recipe.nutrition.carbs,
           estimatedInsulin:
@@ -122,9 +165,10 @@ export default function EatNowPage() {
       }
 
       setLoading(false);
-    }
+    };
 
     load();
+    return () => controller.abort();
   }, []);
 
   if (loading) {
@@ -140,6 +184,8 @@ export default function EatNowPage() {
   }
 
   const currentRecs = tab === "meals" ? recommendations : snackRecs;
+  const servingMult = glucose ? getServingMultiplier(glucose.sgv) : 1;
+  const servingLbl = glucose ? getServingLabel(glucose.sgv) : "Porção normal";
 
   return (
     <div className="px-4 pt-6 space-y-4">
@@ -182,13 +228,30 @@ export default function EatNowPage() {
           )}
 
           {glucose.sgv > 180 && (
-            <div className="mt-2 p-2 bg-orange-200 rounded-lg">
-              <p className="text-sm text-orange-800 font-medium">
+            <div className="mt-2 p-2 bg-red-200 rounded-lg">
+              <p className="text-sm text-red-800 font-medium">
                 Evita hidratos — escolhe snacks sem ou baixos em hidratos
               </p>
             </div>
           )}
+
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs bg-white/60 px-2 py-0.5 rounded-full text-gray-600">
+              {servingLbl}
+            </span>
+            {servingMult !== 1 && (
+              <span className="text-xs text-gray-500">
+                (×{servingMult} do normal)
+              </span>
+            )}
+          </div>
         </div>
+      )}
+
+      {usingPlan && (
+        <p className="text-xs text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg">
+          Recomendações baseadas no teu plano semanal
+        </p>
       )}
 
       <div className="flex gap-2">
@@ -219,60 +282,113 @@ export default function EatNowPage() {
       )}
 
       <div className="space-y-3">
-        {currentRecs.map((rec, i) => (
-          <Link
-            key={rec.recipe.id}
-            href={`/recipes/${rec.recipe.id}`}
-            className="block"
-          >
-            <div className="bg-white rounded-2xl border border-gray-200 p-4 hover:border-blue-300 transition-colors">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    {i === 0 && (
-                      <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                        Recomendado
-                      </span>
-                    )}
-                    {rec.recipe.mealType.includes("snack") &&
-                      rec.recipe.nutrition.carbs <= 6 &&
-                      glucose &&
-                      glucose.sgv > 180 && (
-                        <span className="bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                          Sem hidratos
+        {currentRecs.map((rec, i) => {
+          const adjCalories = Math.round(rec.recipe.nutrition.calories * rec.suggestedServings);
+          const adjCarbs = rec.estimatedCarbs;
+          const adjProtein = Math.round(rec.recipe.nutrition.protein * rec.suggestedServings);
+          const totalGrams = Math.round(
+            (rec.recipe.ingredients.reduce((sum, ing) => {
+              if (["g", "ml"].includes(ing.unit)) return sum + ing.quantity;
+              return sum;
+            }, 0) / rec.recipe.servings) * rec.suggestedServings
+          );
+
+          return (
+            <Link
+              key={rec.recipe.id}
+              href={`/recipes/${rec.recipe.id}`}
+              className="block"
+            >
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 hover:border-blue-300 transition-colors">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {i === 0 && (
+                        <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                          Recomendado
                         </span>
                       )}
+                      {rec.recipe.mealType.includes("snack") &&
+                        rec.recipe.nutrition.carbs <= 6 &&
+                        glucose &&
+                        glucose.sgv > 180 && (
+                          <span className="bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                            Sem hidratos
+                          </span>
+                        )}
+                      {rec.suggestedServings !== 1 && glucose && (
+                        <span className="bg-yellow-100 text-yellow-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                          {Math.round(rec.suggestedServings * 100)}% porção
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-semibold mt-1">{rec.recipe.name}</h3>
+                    <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">
+                      {rec.recipe.description}
+                    </p>
                   </div>
-                  <h3 className="font-semibold mt-1">{rec.recipe.name}</h3>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    {rec.recipe.description}
-                  </p>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 mt-3 text-center">
+                  <div>
+                    <p className="text-base font-semibold">{adjCarbs}g</p>
+                    <p className="text-xs text-gray-400">Hidratos</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold">{adjProtein}g</p>
+                    <p className="text-xs text-gray-400">Proteína</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold">{adjCalories}</p>
+                    <p className="text-xs text-gray-400">kcal</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold text-blue-600">
+                      {rec.estimatedInsulin > 0
+                        ? `${rec.estimatedInsulin}u`
+                        : "0u"}
+                    </p>
+                    <p className="text-xs text-gray-400">Fiasp</p>
+                  </div>
+                </div>
+
+                {totalGrams > 0 && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    ~{totalGrams}g por porção ajustada
+                  </div>
+                )}
+
+                <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                  <span>
+                    {rec.recipe.prepTimeMinutes + rec.recipe.cookTimeMinutes} min
+                  </span>
+                  <span className="ml-auto text-blue-500">
+                    Ver receita →
+                  </span>
                 </div>
               </div>
-
-              <div className="flex gap-4 mt-3 text-sm">
-                <span className="text-gray-600">
-                  {rec.estimatedCarbs}g HC
-                </span>
-                <span className="text-gray-600">
-                  {rec.recipe.nutrition.calories} kcal
-                </span>
-                {rec.estimatedInsulin > 0 && (
-                  <span className="text-blue-600 font-medium">
-                    {rec.estimatedInsulin}u Fiasp
-                  </span>
-                )}
-                <span className="text-gray-400">
-                  {rec.recipe.prepTimeMinutes + rec.recipe.cookTimeMinutes} min
-                </span>
-                <span className="ml-auto text-blue-500 text-xs">
-                  Ver receita →
-                </span>
-              </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          );
+        })}
       </div>
+
+      {currentRecs.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-gray-400">
+            {tab === "meals"
+              ? "Gera um plano semanal primeiro para ter recomendações personalizadas."
+              : "Sem snacks disponíveis."}
+          </p>
+          {tab === "meals" && (
+            <Link
+              href="/planner"
+              className="text-blue-600 text-sm mt-2 inline-block"
+            >
+              Ir para o Plano Semanal
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }

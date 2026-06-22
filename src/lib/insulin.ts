@@ -31,9 +31,9 @@ export function getGlucoseStatus(sgv: number): {
   bgColor: string;
 } {
   if (sgv < 70) return { label: "Baixa", color: "text-red-700", bgColor: "bg-red-100" };
-  if (sgv < 100) return { label: "Abaixo do ideal", color: "text-yellow-700", bgColor: "bg-yellow-100" };
+  if (sgv < 100) return { label: "Normal", color: "text-green-700", bgColor: "bg-green-100" };
   if (sgv <= 120) return { label: "Ideal", color: "text-green-700", bgColor: "bg-green-100" };
-  if (sgv <= 180) return { label: "Acima do ideal", color: "text-orange-700", bgColor: "bg-orange-100" };
+  if (sgv <= 180) return { label: "Acima do ideal", color: "text-green-700", bgColor: "bg-green-100" };
   return { label: "Alta", color: "text-red-700", bgColor: "bg-red-100" };
 }
 
