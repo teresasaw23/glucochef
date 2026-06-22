@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { GlucoseReading, MealPlan } from "@/lib/types";
 import { getRecipeById, RECIPES, getRecipesByMealType } from "@/lib/recipes";
 import { recommendMeal, Recommendation } from "@/lib/recommend";
-import { getGlucoseStatus, getDirectionArrow } from "@/lib/insulin";
-import { USER_CONFIG } from "@/lib/config";
+import { getGlucoseStatus, getDirectionArrow, calculateInsulinDose } from "@/lib/insulin";
 import Link from "next/link";
 
 const PLAN_STORAGE_KEY = "glucochef-meal-plan";
@@ -122,10 +121,8 @@ export default function EatNowPage() {
             }
             const mult = getServingMultiplier(glucoseData!.sgv);
             const estimatedCarbs = Math.round(recipe.nutrition.carbs * mult);
-            const estimatedInsulin =
-              Math.round(
-                (estimatedCarbs / USER_CONFIG.insulinCarbRatio) * 2
-              ) / 2;
+            const dose = calculateInsulinDose(estimatedCarbs, glucoseData!.sgv);
+            const estimatedInsulin = dose.totalDose;
             return {
               recipe,
               reason,
@@ -136,31 +133,31 @@ export default function EatNowPage() {
           })
         );
       } else {
-        const recs = availableRecipes.slice(0, 5).map((recipe) => ({
-          recipe,
-          reason: fromPlan
-            ? "Do teu plano semanal — sem dados de glicemia"
-            : "Recomendação geral — sem dados de glicemia",
-          suggestedServings: 1,
-          estimatedCarbs: recipe.nutrition.carbs,
-          estimatedInsulin:
-            Math.round(
-              (recipe.nutrition.carbs / USER_CONFIG.insulinCarbRatio) * 2
-            ) / 2,
-        }));
+        const recs = availableRecipes.slice(0, 5).map((recipe) => {
+          const d = calculateInsulinDose(recipe.nutrition.carbs, 110);
+          return {
+            recipe,
+            reason: fromPlan
+              ? "Do teu plano semanal — sem dados de glicemia"
+              : "Recomendação geral — sem dados de glicemia",
+            suggestedServings: 1,
+            estimatedCarbs: recipe.nutrition.carbs,
+            estimatedInsulin: d.totalDose,
+          };
+        });
         setRecommendations(recs);
 
         setSnackRecs(
-          snacks.map((recipe) => ({
-            recipe,
-            reason: "Snack para entre refeições",
-            suggestedServings: 1,
-            estimatedCarbs: recipe.nutrition.carbs,
-            estimatedInsulin:
-              Math.round(
-                (recipe.nutrition.carbs / USER_CONFIG.insulinCarbRatio) * 2
-              ) / 2,
-          }))
+          snacks.map((recipe) => {
+            const d = calculateInsulinDose(recipe.nutrition.carbs, 110);
+            return {
+              recipe,
+              reason: "Snack para entre refeições",
+              suggestedServings: 1,
+              estimatedCarbs: recipe.nutrition.carbs,
+              estimatedInsulin: d.totalDose,
+            };
+          })
         );
       }
 
@@ -286,12 +283,8 @@ export default function EatNowPage() {
           const adjCalories = Math.round(rec.recipe.nutrition.calories * rec.suggestedServings);
           const adjCarbs = rec.estimatedCarbs;
           const adjProtein = Math.round(rec.recipe.nutrition.protein * rec.suggestedServings);
-          const totalGrams = Math.round(
-            (rec.recipe.ingredients.reduce((sum, ing) => {
-              if (["g", "ml"].includes(ing.unit)) return sum + ing.quantity;
-              return sum;
-            }, 0) / rec.recipe.servings) * rec.suggestedServings
-          );
+          const portionGrams = Math.round(rec.recipe.servingWeightGrams * rec.suggestedServings);
+          const normalGrams = rec.recipe.servingWeightGrams;
 
           return (
             <Link
@@ -318,7 +311,12 @@ export default function EatNowPage() {
                         )}
                       {rec.suggestedServings !== 1 && glucose && (
                         <span className="bg-yellow-100 text-yellow-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                          {Math.round(rec.suggestedServings * 100)}% porção
+                          {portionGrams}g (normal: {normalGrams}g)
+                        </span>
+                      )}
+                      {rec.suggestedServings === 1 && (
+                        <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
+                          {normalGrams}g porção
                         </span>
                       )}
                     </div>
@@ -352,9 +350,9 @@ export default function EatNowPage() {
                   </div>
                 </div>
 
-                {totalGrams > 0 && (
-                  <div className="mt-2 text-xs text-gray-500">
-                    ~{totalGrams}g por porção ajustada
+                {portionGrams > 0 && rec.suggestedServings !== 1 && (
+                  <div className="mt-2 text-xs text-gray-500 bg-yellow-50 px-2 py-1 rounded">
+                    Come ~{portionGrams}g em vez dos {normalGrams}g normais
                   </div>
                 )}
 

@@ -1,25 +1,50 @@
 import { USER_CONFIG } from "./config";
 import { InsulinDose } from "./types";
 
+/**
+ * Diabetes:M algorithm for insulin bolus calculation.
+ *
+ * correction = (glucose - target) / sensitivity
+ *
+ * IF glucose > target AND correction <= IOBcarb THEN
+ *   correction = -IOBcorr
+ * IF glucose > target AND correction > IOBcarb THEN
+ *   correction = correction - IOB
+ * IF glucose <= target THEN
+ *   correction = correction - IOBcorr
+ *
+ * bolus = (carbs / ratio) + correction
+ */
 export function calculateInsulinDose(
   carbsGrams: number,
-  currentGlucose: number
+  currentGlucose: number,
+  iob: number = 0,
+  iobCarb: number = 0,
+  iobCorr: number = 0,
 ): InsulinDose {
   const { insulinCarbRatio, correctionFactor, targetGlucose } = USER_CONFIG;
 
-  const carbDose = carbsGrams / insulinCarbRatio;
+  const carbBolus = carbsGrams / insulinCarbRatio;
 
-  let correctionDose = 0;
-  if (currentGlucose > USER_CONFIG.targetGlucoseMax) {
-    correctionDose = (currentGlucose - targetGlucose) / correctionFactor;
+  let correction = (currentGlucose - targetGlucose) / correctionFactor;
+
+  if (currentGlucose > targetGlucose) {
+    if (correction <= iobCarb) {
+      correction = -iobCorr;
+    } else {
+      correction = correction - iob;
+    }
+  } else {
+    correction = correction - iobCorr;
   }
 
-  const totalDose = Math.max(0, Math.round((carbDose + correctionDose) * 2) / 2);
+  const totalBolus = carbBolus + correction;
+  const roundedTotal = Math.max(0, Math.round(totalBolus * 10) / 10);
 
   return {
-    carbDose: Math.round(carbDose * 10) / 10,
-    correctionDose: Math.round(correctionDose * 10) / 10,
-    totalDose,
+    carbDose: Math.round(carbBolus * 100) / 100,
+    correctionDose: Math.round(correction * 100) / 100,
+    totalDose: roundedTotal,
     carbsGrams,
     currentGlucose,
   };

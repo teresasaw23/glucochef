@@ -3,7 +3,7 @@ export const USER_CONFIG = {
   correctionFactor: 80, // 1 unit lowers 80 mg/dL
   targetGlucoseMin: 100,
   targetGlucoseMax: 120,
-  targetGlucose: 110, // midpoint for correction calculations
+  targetGlucose: 120, // target for Diabetes:M correction algorithm
   basalInsulin: { type: "Tresiba", units: 5, time: "morning" },
   rapidInsulin: { type: "Fiasp" },
   nightscoutUrl: "", // set via env var NEXT_PUBLIC_NIGHTSCOUT_URL

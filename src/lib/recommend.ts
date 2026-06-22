@@ -1,5 +1,6 @@
 import { Recipe, GlucoseReading } from "./types";
 import { USER_CONFIG } from "./config";
+import { calculateInsulinDose } from "./insulin";
 
 export interface Recommendation {
   recipe: Recipe;
@@ -57,8 +58,8 @@ export function recommendMeal(
     }
 
     const estimatedCarbs = Math.round(recipe.nutrition.carbs * mult);
-    const estimatedInsulin =
-      Math.round((estimatedCarbs / USER_CONFIG.insulinCarbRatio) * 2) / 2;
+    const dose = calculateInsulinDose(estimatedCarbs, sgv);
+    const estimatedInsulin = dose.totalDose;
 
     return {
       recipe,

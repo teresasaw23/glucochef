@@ -3,6 +3,7 @@ export interface Recipe {
   name: string;
   description: string;
   servings: number;
+  servingWeightGrams: number;
   prepTimeMinutes: number;
   cookTimeMinutes: number;
   mealType: MealType[];
@@ -12,6 +13,37 @@ export interface Recipe {
   tags: string[];
   source?: string;
   isCustom?: boolean;
+}
+
+export interface InjectionSite {
+  id: string;
+  label: string;
+  insulinType: "rapida" | "basal";
+}
+
+export interface InjectionLog {
+  date: string;
+  siteId: string;
+  insulinType: "rapida" | "basal";
+  units: number;
+}
+
+export const INJECTION_SITES: InjectionSite[] = [
+  { id: "barriga-esq", label: "Barriga (esquerda)", insulinType: "rapida" },
+  { id: "barriga-dir", label: "Barriga (direita)", insulinType: "rapida" },
+  { id: "braco-esq", label: "Braço (esquerdo)", insulinType: "rapida" },
+  { id: "braco-dir", label: "Braço (direito)", insulinType: "rapida" },
+  { id: "perna-esq", label: "Perna (esquerda)", insulinType: "basal" },
+  { id: "perna-dir", label: "Perna (direita)", insulinType: "basal" },
+  { id: "costas-esq", label: "Costas baixas (esquerda)", insulinType: "basal" },
+  { id: "costas-dir", label: "Costas baixas (direita)", insulinType: "basal" },
+];
+
+export interface CommonFood {
+  name: string;
+  carbsPer100g: number;
+  typicalPortionGrams: number;
+  category: string;
 }
 
 export type MealType = "pequeno-almoco" | "almoco" | "jantar" | "snack";

@@ -111,15 +111,21 @@ export default function InsulinCalculator() {
                   {result.carbDose}u
                 </span>
               </div>
-              {result.correctionDose > 0 && (
+              {result.correctionDose !== 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Dose de correção</span>
+                  <span className="text-gray-600">
+                    {result.correctionDose > 0 ? "Correção +" : "Correção"}
+                  </span>
                   <span className="font-medium">
-                    ({result.currentGlucose} - {USER_CONFIG.targetGlucose}) /{" "}
-                    {USER_CONFIG.correctionFactor} = {result.correctionDose}u
+                    ({result.currentGlucose} − {USER_CONFIG.targetGlucose}) /{" "}
+                    {USER_CONFIG.correctionFactor} = {result.correctionDose > 0 ? "+" : ""}{result.correctionDose}u
                   </span>
                 </div>
               )}
+              <div className="flex justify-between text-xs text-gray-400 pt-1">
+                <span>Algoritmo Diabetes:M</span>
+                <span>Alvo: {USER_CONFIG.targetGlucose} mg/dL</span>
+              </div>
             </div>
           </div>
         )}
